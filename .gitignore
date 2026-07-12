@@ -24,3 +24,14 @@ caddy/config/
 # a machine-local settings file — the global ~/.gitignore's `*.local` rule
 # would otherwise silently exclude it.
 !caddy/Caddyfile.local
+
+# Un-ignore: mu-plugins are custom code we write, not runtime/user content
+# like uploads or wp-admin-installed themes/plugins — track them like any
+# other infra config. `sites/*/wp-content/` above is a directory-level
+# exclusion, so git won't descend into it at all — every path segment down
+# to the files themselves needs its own `!` rule, or later `!` rules are
+# silently skipped.
+!sites/*/wp-content/
+sites/*/wp-content/*
+!sites/*/wp-content/mu-plugins/
+!sites/*/wp-content/mu-plugins/*.php
