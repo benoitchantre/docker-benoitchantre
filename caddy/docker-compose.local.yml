@@ -1,0 +1,14 @@
+# Local-testing override. Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+#
+# Swaps in Caddyfile.local (internal CA) so Caddy doesn't need a reachable
+# ACME endpoint to start.
+
+services:
+  caddy:
+    volumes:
+      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/data/logs
+    env_file: !reset []

@@ -1,0 +1,137 @@
+# startertheme.benoitchantre.com — classic WordPress layout (web root = document root).
+#
+# Services:
+#   db  — MariaDB, private network only, no published port.
+#   wp  — php-fpm (WordPress official image), non-root, wp-content bind-mounted.
+#   web — nginx, serves static files + proxies *.php to wp:9000. This is the
+#         container Caddy reverse-proxies to (container_name: benoit_web).
+#
+# Networks:
+#   web      — external, shared with Caddy. Only the `web` (nginx) service joins it.
+#   internal — private to this stack; wp <-> db traffic only.
+
+services:
+  db:
+    image: mariadb:10.11
+    container_name: startertheme_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MARIADB_DATABASE=${DB_NAME}
+      - MARIADB_USER=${DB_USER}
+      - MARIADB_PASSWORD=${DB_PASSWORD}
+      - MARIADB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+    command:
+      - --innodb-buffer-pool-size=96M
+      - --performance-schema=OFF
+      - --max-connections=40
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
+      - FSETID
+    mem_limit: 256m
+    pids_limit: 150
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  wp:
+    build:
+      context: .
+      dockerfile: Dockerfile.php
+    container_name: startertheme_wp
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - WORDPRESS_DB_HOST=db
+      - WORDPRESS_DB_NAME=${DB_NAME}
+      - WORDPRESS_DB_USER=${DB_USER}
+      - WORDPRESS_DB_PASSWORD=${DB_PASSWORD}
+      - WORDPRESS_TABLE_PREFIX=${WP_TABLE_PREFIX}
+      - WORDPRESS_CONFIG_EXTRA=${WORDPRESS_CONFIG_EXTRA}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+    volumes:
+      # wp_core is the official image's /var/www/html (WP core: index.php,
+      # wp-admin/, wp-includes/, etc.) — the entrypoint copies it in on
+      # first boot if empty. Shared with nginx below (read-only there) so
+      # both containers see the exact same core files.
+      - wp_core:/var/www/html
+      - ./wp-content:/var/www/html/wp-content
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+      - ./opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
+      - FSETID
+    mem_limit: 320m
+    pids_limit: 150
+
+  web:
+    image: nginx:1.27-alpine
+    container_name: startertheme_web
+    restart: unless-stopped
+    depends_on:
+      - wp
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./wp-content:/var/www/html/wp-content:ro
+      # WordPress core (index.php, wp-admin, wp-includes, etc.) lives inside
+      # the wp container's image, not on the host — share it via a volume so
+      # nginx can serve static core files directly instead of proxying them.
+      - wp_core:/var/www/html
+    networks:
+      - internal
+      - web
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    mem_limit: 96m
+    pids_limit: 100
+
+networks:
+  internal:
+  web:
+    external: true
+
+volumes:
+  db_data:
+  # Populated by the wp container's entrypoint (copies WP core into
+  # /var/www/html on first start); shared read-only with nginx.
+  wp_core:

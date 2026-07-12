@@ -1,0 +1,93 @@
+{
+	# Global options
+	email {$ACME_EMAIL}
+
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+# ---------------------------------------------------------------------------
+# Reusable snippet: baseline security headers for every site.
+# ---------------------------------------------------------------------------
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+}
+
+# ---------------------------------------------------------------------------
+# Reusable snippet: block xmlrpc.php (disables pingback/brute-force vector)
+# and common WP scan targets that have no business being hit from outside.
+# ---------------------------------------------------------------------------
+(wp_hardening) {
+	@xmlrpc path *xmlrpc.php
+	respond @xmlrpc 403
+
+	# Config, dumps, and logs — reveal DB structure/credentials if exposed.
+	@wpconfig path *wp-config.php* *.sql *.log
+	respond @wpconfig 403
+
+	# Dependency-manager and VCS metadata — leaks installed package
+	# versions (useful for targeted exploits) and, for .git, potentially
+	# full source/history if a repo was ever initialized in the webroot.
+	@dev_metadata path *composer.json *composer.lock *package.json *package-lock.json *wp-cli.yml *.git *.git/*
+	respond @dev_metadata 403
+
+	# Editor/OS backup and swap files (vim .swp, emacs ~, macOS .DS_Store)
+	# that sometimes get left in a webroot by accident.
+	@editor_junk path *.swp *~ *.DS_Store
+	respond @editor_junk 403
+}
+
+# ---------------------------------------------------------------------------
+# benoitchantre.com
+# ---------------------------------------------------------------------------
+www.benoitchantre.com {
+	redir https://benoitchantre.com{uri} permanent
+}
+
+benoitchantre.com {
+	import security_headers
+	import wp_hardening
+
+	encode zstd gzip
+
+	reverse_proxy benoit_web:80 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/logs/benoitchantre.com.log
+		format json
+	}
+}
+
+# ---------------------------------------------------------------------------
+# startertheme.benoitchantre.com
+# ---------------------------------------------------------------------------
+startertheme.benoitchantre.com {
+	import security_headers
+	import wp_hardening
+
+	encode zstd gzip
+
+	reverse_proxy startertheme_web:80 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/logs/startertheme.benoitchantre.com.log
+		format json
+	}
+}
+
+# To add a new site later: copy one of the blocks above, change the domain
+# and the upstream container name (must match the `web` service's container
+# name in that site's docker-compose.yml, and that container must join the
+# external `web` network).

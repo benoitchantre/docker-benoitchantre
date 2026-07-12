@@ -1,0 +1,83 @@
+# Local-testing variant of the Caddyfile: same routing shape as production,
+# but on local-only domains (benoitchantre.test, startertheme.test — see
+# infra/README.local.md) instead of the real TLDs, so a stray browser tab or
+# forgotten /etc/hosts entry can never be confused with the live site. Uses
+# Caddy's internal CA (`tls internal`) instead of Let's Encrypt, since
+# ACME's HTTP-01 challenge can't reach a private/local IP. Your browser will
+# show a cert warning unless you trust Caddy's local root CA (see
+# infra/README.local.md for how to export/trust it).
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+
+{
+	# No `email` needed — internal CA doesn't do ACME.
+	local_certs
+
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+}
+
+(wp_hardening) {
+	@xmlrpc path /xmlrpc.php /wp/xmlrpc.php
+	respond @xmlrpc 403
+
+	@wpconfig path *wp-config.php* *.sql *.log
+	respond @wpconfig 403
+
+	@dev_metadata path *composer.json *composer.lock *package.json *package-lock.json *wp-cli.yml *.git *.git/*
+	respond @dev_metadata 403
+
+	@editor_junk path *.swp *~ *.DS_Store
+	respond @editor_junk 403
+}
+
+www.benoitchantre.test {
+	tls internal
+	redir https://benoitchantre.test{uri} permanent
+}
+
+benoitchantre.test {
+	tls internal
+	import security_headers
+	import wp_hardening
+
+	encode zstd gzip
+
+	reverse_proxy benoit_web:80 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/logs/benoitchantre.test.log
+		format json
+	}
+}
+
+startertheme.test {
+	tls internal
+	import security_headers
+	import wp_hardening
+
+	encode zstd gzip
+
+	reverse_proxy startertheme_web:80 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/logs/startertheme.test.log
+		format json
+	}
+}

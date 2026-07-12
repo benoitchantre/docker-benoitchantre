@@ -1,0 +1,26 @@
+# Secrets
+.env
+*/.env
+*/*/.env
+
+# Runtime data (bind mounts, DB volumes if bind-mounted, cache)
+sites/*/wp-content/
+**/mysql-data/
+
+# Backups & dumps
+backups/
+*.sql
+*.sql.gz
+*.tar.gz
+
+# Let's Encrypt / Caddy runtime state (if ever bind-mounted instead of named volume)
+caddy/data/
+caddy/config/
+
+# OS cruft
+.DS_Store
+
+# Un-ignore: caddy/Caddyfile.local is a tracked local-override config, not
+# a machine-local settings file — the global ~/.gitignore's `*.local` rule
+# would otherwise silently exclude it.
+!caddy/Caddyfile.local

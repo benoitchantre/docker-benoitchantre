@@ -1,0 +1,53 @@
+# Shared reverse proxy for all WordPress site stacks.
+#
+# Responsibilities:
+#   - Terminate TLS (automatic Let's Encrypt via Caddy's built-in ACME client)
+#   - Route each domain to the correct site's web container over the shared
+#     `web` external network
+#   - Apply baseline security headers, compression, and the xmlrpc block
+#
+# Prerequisite (run once, before `docker compose up`):
+#   docker network create web
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - web
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/data/logs
+    env_file:
+      - .env
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 100
+    healthcheck:
+      # Explicit 127.0.0.1, not localhost — the admin API binds IPv4-only,
+      # but `localhost` can resolve to ::1 first inside the container and
+      # fail the healthcheck even though Caddy is perfectly healthy.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  web:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+  # Named (not internal-only) so other stacks can mount it read-only to tail
+  # Caddy's access logs. Create it explicitly before the stack's first run:
+  # `docker volume create caddy_logs`.
+  caddy_logs:
+    name: caddy_logs
