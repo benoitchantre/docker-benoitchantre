@@ -88,6 +88,39 @@ reachable from outside their own stack.
 4. `docker compose up -d` the new stack, reload Caddy
    (`docker exec caddy caddy reload --config /etc/caddy/Caddyfile`).
 
+## Deploying changes / git on the VPS
+
+The VPS checkout is owned by the deploy user (`debian`), **not root** — plain
+`git pull` works with no `sudo`. Two things to avoid:
+
+- **Never run git as root** (`sudo git pull`, `sudo git reset`, etc.) on this
+  checkout. Every file git writes ends up owned by whoever ran the command —
+  a root `git pull` silently flips tracked files back to `root:root`,
+  including the two files that live inside a site's `wp-content/`
+  (`wp-content/mu-plugins/configure-email.php` on each site), which need to
+  stay owned by uid 82 (`www-data`, the php-fpm worker user) or WordPress
+  can't read/write around them correctly. If that ever happens again:
+  ```bash
+  sudo chown 82:82 sites/*/wp-content/mu-plugins/configure-email.php
+  ```
+- **Never run `git reset --hard`** on the VPS checkout — it silently
+  discards any uncommitted local changes (including one-off hotfixes made
+  directly on the server that haven't been committed/pushed yet). Use plain
+  `git pull`; if it refuses due to local changes, look at what's different
+  before discarding anything.
+
+More broadly: everything under a site's `wp-content/` should be owned by
+uid 82, not `debian` — that's the directory WordPress/php-fpm actually
+writes into (uploads, cache, `upgrade-temp-backup/`, etc.), and anything
+left `debian`-owned there (e.g. from a raw `scp`/`rsync` transfer during
+migration, before the site's stack ever ran) will show up as WordPress
+site-health write-permission errors. Check with:
+```bash
+find sites/<site>/wp-content -not -uid 82
+```
+and fix with `sudo chown -R 82:82 sites/<site>/wp-content` if anything
+shows up (safe to run any time — it only touches ownership, not content).
+
 ## Day-to-day operations
 
 **Start / stop everything** (or specific sites), in the right order:
