@@ -109,13 +109,19 @@ The VPS checkout is owned by the deploy user (`debian`), **not root** — plain
   `git pull`; if it refuses due to local changes, look at what's different
   before discarding anything.
 
-More broadly: everything under a site's `wp-content/` should be owned by
-uid 82, not `debian` — that's the directory WordPress/php-fpm actually
-writes into (uploads, cache, `upgrade-temp-backup/`, etc.), and anything
-left `debian`-owned there (e.g. from a raw `scp`/`rsync` transfer during
-migration, before the site's stack ever ran) will show up as WordPress
-site-health write-permission errors. Check with:
+More broadly: `wp-content/` itself **and everything under it** should be
+owned by uid 82, not `debian` — that's the directory WordPress/php-fpm
+actually writes into (uploads, cache, `upgrade-temp-backup/`, etc.), and
+anything left `debian`-owned there (e.g. from a raw `scp`/`rsync` transfer
+during migration, or from a `mv`/rename that leaves the directory itself at
+its old ownership even after its contents are fixed) will show up as
+WordPress site-health write-permission errors, or as a surprise FTP/SSH
+credentials prompt when deleting/installing a plugin from wp-admin (that
+prompt means `get_filesystem_method()` fell back from `direct` because the
+direct-write check failed — almost always this). Check **the directory
+itself**, not just its contents:
 ```bash
+stat -c "%u:%g %n" sites/<site>/wp-content
 find sites/<site>/wp-content -not -uid 82
 ```
 and fix with `sudo chown -R 82:82 sites/<site>/wp-content` if anything
