@@ -20,6 +20,7 @@ set -euo pipefail
 echo "== 1. System update =="
 apt-get update
 apt-get -y upgrade
+apt-get install -y rsync
 
 echo "== 2. Create non-root sudo user (skip if already present) =="
 read -r -p "Username for the admin account [benoit]: " NEWUSER

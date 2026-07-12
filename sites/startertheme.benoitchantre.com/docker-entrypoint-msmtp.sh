@@ -1,7 +1,7 @@
 #!/bin/bash
-# Substitutes SMTP_* env vars into /etc/msmtprc (msmtp has no native env-var
-# expansion), tightens its permissions (it will contain a plaintext
-# password), then hands off to php:fpm's default entrypoint.
+# Wraps the official WordPress entrypoint: substitutes SMTP_* env vars into
+# /etc/msmtprc (msmtp has no native env-var expansion), tightens its
+# permissions (it will contain a plaintext password), then hands off.
 set -euo pipefail
 
 : "${SMTP_HOST:?SMTP_HOST is required}"
@@ -18,4 +18,4 @@ sed -e "s/__SMTP_HOST__/${SMTP_HOST}/" \
     /etc/msmtprc.template > /etc/msmtprc
 chmod 600 /etc/msmtprc
 
-exec docker-php-entrypoint "$@"
+exec docker-entrypoint.sh "$@"
