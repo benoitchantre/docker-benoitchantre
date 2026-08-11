@@ -31,7 +31,10 @@ docker volume inspect caddy_logs >/dev/null 2>&1 || docker volume create caddy_l
 # image pull or ACME hiccup shouldn't block getting the sites back up. Site
 # bring-up below still uses `set -e` semantics per site.
 echo "==> Caddy"
-(cd caddy && docker compose up -d) || echo "!! Caddy failed to start — sites will be up but unreachable from outside until this is fixed" >&2
+# `pull` before `up` so re-running this picks up newer patch builds of the
+# floating base images (caddy:2, mariadb, nginx). Without it, Docker keeps
+# whatever image was local when the container first started.
+(cd caddy && docker compose pull && docker compose up -d) || echo "!! Caddy failed to start — sites will be up but unreachable from outside until this is fixed" >&2
 
 for site in "${sites[@]}"; do
     site_dir="sites/$site"
@@ -43,6 +46,12 @@ for site in "${sites[@]}"; do
         echo "skip: $site (no .env — copy .env.example and fill it in first)" >&2
         continue
     fi
+
+    # Refresh the site's pullable base images (mariadb, nginx) before bringing
+    # anything up. The wp service is built locally, so `pull` skips it — its
+    # base is refreshed by `--pull always` on the build step below.
+    echo "==> $site: pull base images"
+    (cd "$site_dir" && docker compose pull)
 
     echo "==> $site: db"
     (cd "$site_dir" && docker compose up -d db)
@@ -57,7 +66,10 @@ for site in "${sites[@]}"; do
     done
 
     echo "==> $site: wp + web"
-    (cd "$site_dir" && docker compose up -d --build)
+    # --pull always forces the wp image's FROM base (wordpress:*-fpm-alpine) to
+    # be re-fetched at build time; without it a cached base layer can persist
+    # for weeks and miss upstream security fixes.
+    (cd "$site_dir" && docker compose up -d --build --pull always)
 done
 
 echo "==> Done. 'docker compose ps' in each directory, or 'docker ps', to check status."
