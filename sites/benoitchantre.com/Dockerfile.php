@@ -10,7 +10,11 @@
 # every 5 minutes instead. See infra/scripts/wp-cron.sh.
 FROM wordpress:php8.5-fpm-alpine
 
-RUN apk add --no-cache msmtp ca-certificates curl less \
+# `apk upgrade` refreshes packages inherited from the base image too (imagemagick,
+# libs, ...), which the official image only updates when it is itself rebuilt.
+# start.sh builds with --no-cache so this layer really re-runs on every deploy.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache msmtp ca-certificates curl less \
     && curl -o /usr/local/bin/wp -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
     && chmod +x /usr/local/bin/wp
 

@@ -66,10 +66,13 @@ for site in "${sites[@]}"; do
     done
 
     echo "==> $site: wp + web"
-    # --pull always forces the wp image's FROM base (wordpress:*-fpm-alpine) to
-    # be re-fetched at build time; without it a cached base layer can persist
-    # for weeks and miss upstream security fixes.
-    (cd "$site_dir" && docker compose up -d --build --pull always)
+    # --pull re-fetches the wp image's FROM base (wordpress:*-fpm-alpine);
+    # without it a cached base layer can persist for weeks and miss upstream
+    # security fixes. --no-cache is needed as well: otherwise the Dockerfile's
+    # `apk upgrade` / `apk add` layer is served from cache indefinitely and
+    # curl, imagemagick, etc. stay at whatever version existed when that layer
+    # was first built.
+    (cd "$site_dir" && docker compose build --pull --no-cache wp && docker compose up -d)
 done
 
 echo "==> Done. 'docker compose ps' in each directory, or 'docker ps', to check status."
