@@ -81,6 +81,7 @@ services:
       - ./wp-content:/var/www/html/wp-content
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
       - ./opcache.ini:/usr/local/etc/php/conf.d/opcache.ini:ro
+      - ./hardening.ini:/usr/local/etc/php/conf.d/hardening.ini:ro
     networks:
       - internal
     security_opt:

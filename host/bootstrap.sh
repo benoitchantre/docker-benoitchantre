@@ -82,6 +82,20 @@ Unattended-Upgrade::Automatic-Reboot "true";
 Unattended-Upgrade::Automatic-Reboot-Time "04:00";
 EOF
 
+# Docker's own apt repo (docker-ce, containerd.io which ships runc, compose and
+# buildx plugins) is not a Debian origin, so unattended-upgrades skips it by
+# default and the container runtime silently falls behind. Allow it too; the
+# list is appended to the Debian origins in 50unattended-upgrades. Safe because
+# daemon.json sets "live-restore": true, so containers survive a daemon
+# restart. Harmless if the Docker repo is not configured yet (step 6).
+# Match on archive=, NOT codename=: Docker's Release file has no Codename, so
+# apt reports it as empty and a codename= pattern would silently never match.
+cat > /etc/apt/apt.conf.d/52unattended-docker <<'EOF'
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Docker,label=Docker CE,archive=${distro_codename}";
+};
+EOF
+
 # needrestart: after a shared-library patch (openssl, glibc, ...), the fix
 # isn't live until every process that loaded the old library restarts — which
 # usually needs a service restart, not a full reboot. needrestart detects
