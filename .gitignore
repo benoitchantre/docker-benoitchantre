@@ -17,6 +17,9 @@ backups/
 caddy/data/
 caddy/config/
 
+# Output of the host cron job (scripts/wp-cron.sh)
+wp-cron.log
+
 # OS cruft
 .DS_Store
 

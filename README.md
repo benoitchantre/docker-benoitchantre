@@ -171,6 +171,12 @@ Crontab (every 5 minutes, as the deploy user):
 Both site images include `wp-cli` for this (see `Dockerfile.php` in each
 site). Safe to run even if a container isn't up yet (skips with a warning).
 
+The script is silent when everything works: `wp-cron.log` only receives
+problems (errors, warnings, skipped sites, a non-zero wp-cli exit status), each
+with a timestamp and the site name. An empty or missing log means cron is
+healthy, so it never needs rotating. To see that cron is actually firing, check
+the scheduled events instead: `docker exec -u 82 benoit_wp wp cron event list`.
+
 **Backups** (manual run or via cron):
 ```bash
 ./scripts/backup.sh                    # all sites
